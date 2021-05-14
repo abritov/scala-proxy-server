@@ -28,8 +28,12 @@ object Proxy {
     }.as[SocksV4]
   }
 
-  case class SocksV5(auth: Socks5Authorization, header: Option[Socks5Header]) extends Proxy
+  case class SocksV5(auth: Socks5Authorization, header: Socks5Header) extends Proxy
   object SocksV5 {
+    implicit val codec: Codec[SocksV5] = {
+      ("auth" | Codec[Socks5Authorization]) ::
+        ("header" | Codec[Socks5Header])
+    }.as[SocksV5]
   }
 
   object HttpTunnel extends Proxy
