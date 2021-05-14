@@ -1,16 +1,25 @@
 package org.example.socksproxy
 
+import com.comcast.ip4s.{Ipv4Address, Ipv6Address}
+import scodec.Attempt.{Failure, Successful}
 import scodec._
 import scodec.bits._
 import scodec.codecs._
 import scodec.codecs.implicits._
 
-import java.net.{Inet4Address, Inet6Address}
-
 sealed trait Proxy
 object Proxy {
-  case class SocksV4(command: Socks4Command, port: Int, address: Inet4Address, clientId: String) extends Proxy
+  implicit val ipv4Codec: Codec[Ipv4Address] = uint32 xmap (Ipv4Address.fromLong, _.toLong)
+
+  case class SocksV4(command: Socks4Command, port: Int, address: Ipv4Address, clientId: String) extends Proxy
   object SocksV4 {
+    implicit val codec: Codec[SocksV4] = {
+        constant((hex"04")) ::
+        ("command" | Codec[Socks4Command]) ::
+          ("port" | uint16) ::
+          ("address" | ipv4Codec) ::
+          ("clientId" | variableSizeBytes(uint8, ascii))
+    }.as[SocksV4]
   }
 
   case class SocksV4A(command: Socks4Command, port: Int, clientId: String, domain: String) extends Proxy
@@ -53,9 +62,9 @@ class Socks5Authorization(supportedAuthProtocolsCount: Int, authProtocols: List[
 
 sealed trait Socks5Address
 object Socks5Address {
-  case class IpV4(address: Inet4Address) extends Socks5Address
+  case class IpV4(address: Ipv4Address) extends Socks5Address
   case class Domain(domain: String) extends Socks5Address
-  case class IpV6(address: Inet6Address) extends Socks5Address
+  case class IpV6(address: Ipv6Address) extends Socks5Address
 }
 
 class Socks5Header(command: Socks5Command, address: Socks5Address)
