@@ -7,9 +7,46 @@ import scodec.bits._
 import scodec.codecs._
 import scodec.codecs.implicits._
 
+object Address {
+  implicit val codec = {
+    (("address_type" | uint8) >>:~ { addressType =>
+      ("hardware_address" | conditional(
+        addressType == 0, uint32)) ::
+        ("network_address" | conditional(
+          addressType == 1, variableSizeBytes(uint8, ascii)))
+    })
+  }
+}
+
 sealed trait Proxy
 object Proxy {
   implicit val ipv4Codec: Codec[Ipv4Address] = uint32 xmap (Ipv4Address.fromLong, _.toLong)
+
+  private object SocksV4Type extends Enumeration {
+    type SocksV4Type = Value
+    val SOCKS_4: Proxy.SocksV4Type.Value = Value(0)
+    val SOCKS_4A: Proxy.SocksV4Type.Value = Value(1)
+  }
+  import SocksV4Type._
+
+  private class SocksV4AddressTypeCodec extends Codec[SocksV4Type] {
+    private val codec: Codec[(Int ~ Socks4Command ~ Int ~ Int ~ Int ~ Int ~ Int)] = uint8 ~ Codec[Socks4Command] ~ uint16 ~ uint8 ~ uint8 ~ uint8 ~ uint8
+
+    override def encode(value: SocksV4Type): Attempt[BitVector] = Attempt.successful(BitVector.empty)
+
+    override def sizeBound: SizeBound = SizeBound.exact(8 * 8)
+
+    override def decode(bits: BitVector): Attempt[DecodeResult[SocksV4Type]] =
+      codec
+        .decode(bits)
+        .map({
+          case DecodeResult(((((((_, _), _), a), b), c), d), buffer) => (a, b, c, d) match {
+              case (0, 0, 0, _) => DecodeResult(SOCKS_4A, buffer)
+              case _ => DecodeResult(SOCKS_4, buffer)
+          }})
+
+    override def toString = "SocksV4AddressTypeCodec"
+  }
 
   case class SocksV4(command: Socks4Command, port: Int, address: Ipv4Address, clientId: String) extends Proxy
   object SocksV4 {
