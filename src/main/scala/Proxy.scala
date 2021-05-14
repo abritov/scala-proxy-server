@@ -7,6 +7,21 @@ import scodec.bits._
 import scodec.codecs._
 import scodec.codecs.implicits._
 
+sealed trait ProxyResponse
+object ProxyResponse {
+  final case class Socks5AuthMethodAccepted(method: Int) extends ProxyResponse
+
+  object Socks5AuthMethodAccepted {
+    implicit val codec: Codec[Socks5AuthMethodAccepted] = {
+        ("method" | uint8)
+    }.as[Socks5AuthMethodAccepted]
+  }
+
+  implicit val codec: Codec[ProxyResponse] = discriminated[ProxyResponse]
+    .by(uint8)
+    .typecase(5, Socks5AuthMethodAccepted.codec)
+}
+
 
 sealed trait Proxy
 object Proxy {
@@ -34,7 +49,6 @@ object Proxy {
   case class SocksV5(auth: Socks5Authorization, header: Socks5Header) extends Proxy
   object SocksV5 {
     implicit val codec: Codec[SocksV5] = {
-      constant((hex"05")) ::
       ("auth" | Codec[Socks5Authorization]) ::
         ("header" | Codec[Socks5Header])
     }.as[SocksV5]
