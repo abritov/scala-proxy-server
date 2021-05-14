@@ -80,4 +80,11 @@ object Socks5Address {
   case class IpV6(address: Ipv6Address) extends Socks5Address
 }
 
-class Socks5Header(command: Socks5Command, address: Socks5Address)
+case class Socks5Header(command: Socks5Command, address: Socks5Address, port: Int)
+object Socks5Header {
+  implicit val codec: Codec[Socks5Header] = {
+    ("command" | Codec[Socks5Command]) ::
+      ("address" | Codec[Socks5Address]) ::
+      ("port" | uint16)
+  }.as[Socks5Header]
+}
