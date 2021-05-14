@@ -10,10 +10,10 @@ import java.net.{Inet4Address, InetAddress}
 
 
 object Main extends App {
-  val socks4 = Proxy.SocksV4(Socks4Command.Connect, 65535, Ipv4Address.fromBytes(127, 0, 0, 1), "test")
-  println(socks4)
+  val socks4 = Proxy.SocksV4(Socks4Command.Connect, 65535, Ipv4Address.fromBytes(127, 0, 0, 1), "test", None)
 
   println(Codec[Proxy.SocksV4].decode(hex"040100507F0000010461616161".bits))
+  println(Codec[Proxy.SocksV5].decode(hex"05010001000304616161610050".bits))
 
 //  val x: Codec[(Int, ByteVector)] = uint8 flatZip { numBytes => bytes(numBytes) }
 //  val y: Codec[ByteVector] = x xmap[ByteVector]({ case (_, bv) => bv }, bv => (bv.size.toInt, bv))

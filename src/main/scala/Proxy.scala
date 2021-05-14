@@ -31,6 +31,7 @@ object Proxy {
   case class SocksV5(auth: Socks5Authorization, header: Socks5Header) extends Proxy
   object SocksV5 {
     implicit val codec: Codec[SocksV5] = {
+      constant((hex"05")) ::
       ("auth" | Codec[Socks5Authorization]) ::
         ("header" | Codec[Socks5Header])
     }.as[SocksV5]
@@ -79,15 +80,19 @@ object Socks5Authorization {
 
 sealed trait Socks5Address
 object Socks5Address {
+  implicit val codec: Codec[Socks5Address] = discriminated[Socks5Address]
+    .by(uint8)
+    .typecase(1, Proxy.ipv4Codec.xmap[IpV4](Socks5Address.IpV4, _.address))
+    .typecase(3, variableSizeBytes(uint8, ascii).xmap[Domain](Socks5Address.Domain, _.domain))
   case class IpV4(address: Ipv4Address) extends Socks5Address
   case class Domain(domain: String) extends Socks5Address
-  case class IpV6(address: Ipv6Address) extends Socks5Address
 }
 
 case class Socks5Header(command: Socks5Command, address: Socks5Address, port: Int)
 object Socks5Header {
   implicit val codec: Codec[Socks5Header] = {
     ("command" | Codec[Socks5Command]) ::
+      constant(hex"00") ::
       ("address" | Codec[Socks5Address]) ::
       ("port" | uint16)
   }.as[Socks5Header]
