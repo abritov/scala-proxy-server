@@ -11,11 +11,14 @@ import scodec.codecs.implicits._
 sealed trait Proxy
 object Proxy {
   implicit val ipv4Codec: Codec[Ipv4Address] = uint32 xmap (Ipv4Address.fromLong, _.toLong)
+  implicit val codec: Codec[Proxy] = discriminated[Proxy]
+    .by(uint8)
+    .typecase(4, Codec[SocksV4])
+    .typecase(5, Codec[SocksV5])
 
   case class SocksV4(command: Socks4Command, port: Int, address: Ipv4Address, clientId: String, domain: Option[String]) extends Proxy
   object SocksV4 {
     implicit val codec: Codec[SocksV4] = {
-        constant((hex"04")) ::
         ("command" | Codec[Socks4Command]) ::
           ("port" | uint16) ::
           (("address" | ipv4Codec) flatPrepend { fields =>
