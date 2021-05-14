@@ -29,6 +29,8 @@ object Proxy {
   }
 
   case class SocksV5(auth: Socks5Authorization, header: Option[Socks5Header]) extends Proxy
+  object SocksV5 {
+  }
 
   object HttpTunnel extends Proxy
 
@@ -62,7 +64,14 @@ object Socks5Command {
   object UdpAssociation extends Socks5Command
 }
 
-class Socks5Authorization(supportedAuthProtocolsCount: Int, authProtocols: List[Byte])
+case class Socks5Authorization(supportedAuthProtocolsCount: Int, authProtocols: Vector[Int])
+object Socks5Authorization {
+  implicit val codec: Codec[Socks5Authorization] = {
+    (("supportedAuthProtocolsCount" | uint8) flatPrepend { count =>
+      ("authProtocols" | vectorOfN(provide(count), uint8)).hlist
+    })
+  }.as[Socks5Authorization]
+}
 
 sealed trait Socks5Address
 object Socks5Address {
