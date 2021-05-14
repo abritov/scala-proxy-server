@@ -1,7 +1,6 @@
 name := "proxy"
 version := "0.1"
 scalaVersion := "2.13.5"
-idePackagePrefix := Some("org.example.socksproxy")
 
 libraryDependencies ++= Seq(
   "co.fs2" %% "fs2-io" % "3.0-65-a77f014",

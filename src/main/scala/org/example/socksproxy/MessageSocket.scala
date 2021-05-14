@@ -5,8 +5,8 @@ import cats.effect.std.Queue
 import cats.implicits._
 import fs2.Stream
 import fs2.io.net.Socket
-import scodec.{Decoder, Encoder}
 import scodec.stream.{StreamDecoder, StreamEncoder}
+import scodec.{Decoder, Encoder}
 
 /**
  * Socket which reads a stream of messages of type `In` and allows writing

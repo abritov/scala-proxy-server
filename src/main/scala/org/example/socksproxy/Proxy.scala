@@ -1,11 +1,9 @@
 package org.example.socksproxy
 
-import com.comcast.ip4s.{Ipv4Address, Ipv6Address}
-import scodec.Attempt.{Failure, Successful}
+import com.comcast.ip4s.Ipv4Address
 import scodec._
 import scodec.bits._
 import scodec.codecs._
-import scodec.codecs.implicits._
 
 sealed trait ProxyResponse
 object ProxyResponse {
