@@ -7,12 +7,38 @@ import scodec.codecs._
 
 sealed trait ProxyResponse
 object ProxyResponse {
+  final case class Socks4AuthorizationOk() extends ProxyResponse
+  final case class Socks4AuthorizationErr() extends ProxyResponse
   final case class Socks5AuthMethodAccepted(method: Int) extends ProxyResponse
 
   object Socks5AuthMethodAccepted {
     implicit val codec: Codec[Socks5AuthMethodAccepted] = {
         ("method" | uint8)
     }.as[Socks5AuthMethodAccepted]
+  }
+
+
+  class Socks4AuthorizationOkCodec extends Codec[Socks4AuthorizationOk] {
+    override def decode(bits: BitVector): Attempt[DecodeResult[Socks4AuthorizationOk]] = Attempt.failure(Err("call decode on Socks4AuthorizationOkCodec"))
+
+    override def encode(value: Socks4AuthorizationOk): Attempt[BitVector] = Attempt.successful(hex"005a000000000000".bits)
+
+    override def sizeBound: SizeBound = SizeBound.exact(8 * 8)
+  }
+  object Socks4AuthorizationOk {
+    implicit val codec: Codec[Socks4AuthorizationOk] = new Socks4AuthorizationOkCodec()
+  }
+
+
+  class Socks4AuthorizationErrCodec extends Codec[Socks4AuthorizationErr] {
+    override def decode(bits: BitVector): Attempt[DecodeResult[Socks4AuthorizationErr]] = Attempt.failure(Err("call decode on Socks4AuthorizationOkCodec"))
+
+    override def encode(value: Socks4AuthorizationErr): Attempt[BitVector] = Attempt.successful(hex"005b000000000000".bits)
+
+    override def sizeBound: SizeBound = SizeBound.exact(8 * 8)
+  }
+  object Socks4AuthorizationErr {
+    implicit val codec: Codec[Socks4AuthorizationErr] = new Socks4AuthorizationErrCodec()
   }
 
   implicit val codec: Codec[ProxyResponse] = discriminated[ProxyResponse]
