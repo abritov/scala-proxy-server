@@ -92,15 +92,15 @@ object Server {
                                      clientId: UUID,
                                      messageSocket: MessageSocket[F, Proxy, ProxyResponse]
                                    )(implicit F: MonadError[F, Throwable]): Stream[F, Nothing] =
-    messageSocket.read.flatMap {
+    messageSocket.read.evalMap {
       case Proxy.SocksV4(command, port, address, clientId, None) => {
-        Stream.exec(Console[F].info("socks proxy v4"))
+        Console[F].println(s"socks proxy v4 $command $port $address")
       }
       case Proxy.SocksV4(command, port, _, clientId, Some(domain)) => {
-        Stream.exec(Console[F].info("socks proxy v4a"))
+        Console[F].println(s"socks proxy v4a $command $port $domain")
       }
       case Proxy.SocksV5(auth, header) => {
-        Stream.exec(Console[F].info("socks proxy v5"))
+        Console[F].println("socks proxy v5")
       }
     }.drain
 }
