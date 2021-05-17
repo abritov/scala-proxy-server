@@ -10,6 +10,7 @@ object ProxyResponse {
   final case class Socks4AuthorizationOk() extends ProxyResponse
   final case class Socks4AuthorizationErr() extends ProxyResponse
   final case class Socks5AuthMethodAccepted(method: Int) extends ProxyResponse
+  final case class Socks5Response(response: Socks5ResponseCode, addressType: Socks5Address)
 
   object Socks5AuthMethodAccepted {
     implicit val codec: Codec[Socks5AuthMethodAccepted] = {
@@ -39,6 +40,39 @@ object ProxyResponse {
   }
   object Socks4AuthorizationErr {
     implicit val codec: Codec[Socks4AuthorizationErr] = new Socks4AuthorizationErrCodec()
+  }
+
+
+  object Socks5Response {
+    implicit val codec: Codec[Socks5Response] = {
+      ("response" | Codec[Socks5ResponseCode]) ::
+        constant(hex"00") ::
+        ("addressType" | Codec[Socks5Address])
+    }.as[Socks5Response]
+  }
+  sealed trait Socks5ResponseCode
+  object Socks5ResponseCode {
+    implicit val codec: DiscriminatorCodec[Socks5ResponseCode, Int] = mappedEnum(
+      uint8,
+      Socks5ResponseCode.RequestGranted -> 0,
+      Socks5ResponseCode.ServerError -> 1,
+      Socks5ResponseCode.Forbidden -> 2,
+      Socks5ResponseCode.NetworkUnavailable -> 3,
+      Socks5ResponseCode.EndpointUnavailable -> 4,
+      Socks5ResponseCode.ConnectionRefused -> 5,
+      Socks5ResponseCode.TTLTimeout -> 6,
+      Socks5ResponseCode.NotSupported -> 7,
+      Socks5ResponseCode.AddressNotSupported -> 8
+    )
+    object RequestGranted extends Socks5ResponseCode
+    object ServerError extends Socks5ResponseCode
+    object Forbidden extends Socks5ResponseCode
+    object NetworkUnavailable extends Socks5ResponseCode
+    object EndpointUnavailable extends Socks5ResponseCode
+    object ConnectionRefused extends Socks5ResponseCode
+    object TTLTimeout extends Socks5ResponseCode
+    object NotSupported extends Socks5ResponseCode
+    object AddressNotSupported extends Socks5ResponseCode
   }
 
   implicit val codec: Codec[ProxyResponse] = discriminated[ProxyResponse]
