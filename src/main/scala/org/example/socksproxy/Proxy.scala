@@ -56,6 +56,11 @@ object Proxy {
     .typecase(5, Codec[SocksV5Authorization])
 
   final case class SocksV4(command: Socks4Command, port: Int, address: Ipv4Address, clientId: String, domain: Option[String]) extends Proxy
+  final case class SocksV5Authorization(supportedAuthProtocolsCount: Int, authProtocols: Vector[Int]) extends Proxy
+  final case class Socks5Header(command: Socks5Command, address: Socks5Address, port: Int) extends Proxy
+  object HttpTunnel extends Proxy
+  final case class Http(address: String) extends Proxy
+
   object SocksV4 {
     implicit val codec: Codec[SocksV4] = {
         ("command" | Codec[Socks4Command]) ::
@@ -70,7 +75,6 @@ object Proxy {
     }.as[SocksV4]
   }
 
-  final case class SocksV5Authorization(supportedAuthProtocolsCount: Int, authProtocols: Vector[Int]) extends Proxy
   object SocksV5Authorization {
     implicit val codec: Codec[SocksV5Authorization] = {
       (("supportedAuthProtocolsCount" | uint8) flatPrepend { count =>
@@ -79,9 +83,14 @@ object Proxy {
     }.as[SocksV5Authorization]
   }
 
-  object HttpTunnel extends Proxy
-
-  case class Http(address: String) extends Proxy
+  object Socks5Header {
+    implicit val codec: Codec[Socks5Header] = {
+      ("command" | Codec[Socks5Command]) ::
+        constant(hex"00") ::
+        ("address" | Codec[Socks5Address]) ::
+        ("port" | uint16)
+    }.as[Socks5Header]
+  }
 }
 
 
@@ -119,14 +128,4 @@ object Socks5Address {
     .typecase(3, variableSizeBytes(uint8, ascii).xmap[Domain](Socks5Address.Domain, _.domain))
   case class IpV4(address: Ipv4Address) extends Socks5Address
   case class Domain(domain: String) extends Socks5Address
-}
-
-case class Socks5Header(command: Socks5Command, address: Socks5Address, port: Int)
-object Socks5Header {
-  implicit val codec: Codec[Socks5Header] = {
-    ("command" | Codec[Socks5Command]) ::
-      constant(hex"00") ::
-      ("address" | Codec[Socks5Address]) ::
-      ("port" | uint16)
-  }.as[Socks5Header]
 }
