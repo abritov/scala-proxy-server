@@ -99,7 +99,7 @@ object Server {
       case Proxy.SocksV4(command, port, _, clientId, Some(domain)) => {
         Console[F].println(s"socks proxy v4a $command $port $domain")
       }
-      case Proxy.SocksV5(auth, header) => {
+      case Proxy.SocksV5Authorization(count, protocols) => {
         Console[F].println("socks proxy v5")
       }
     }.drain
