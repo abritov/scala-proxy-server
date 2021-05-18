@@ -49,6 +49,10 @@ object ProxyResponse {
         constant(hex"00") ::
         ("addressType" | Codec[Socks5Address])
     }.as[Socks5Response]
+
+    def requestGranted(addressType: Socks5Address): Socks5Response = Socks5Response(Socks5ResponseCode.RequestGranted, addressType)
+    def endpointUnavailable(addressType: Socks5Address): Socks5Response = Socks5Response(Socks5ResponseCode.EndpointUnavailable, addressType)
+    def notSupported(addressType: Socks5Address): Socks5Response = Socks5Response(Socks5ResponseCode.NotSupported, addressType)
   }
   sealed trait Socks5ResponseCode
   object Socks5ResponseCode {

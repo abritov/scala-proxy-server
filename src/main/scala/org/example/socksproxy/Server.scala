@@ -1,11 +1,12 @@
 package org.example.socksproxy
 
-import cats.effect.{Async, Concurrent, Ref, Sync}
+import cats.effect.{Async, Concurrent, MonadCancel, Ref, Sync}
 import cats.implicits._
 import cats.{FlatMap, MonadError}
-import com.comcast.ip4s.{Ipv4Address, Port}
+import com.comcast.ip4s.{Host, Ipv4Address, Port, SocketAddress}
 import fs2.Stream
 import fs2.io.net.{Network, Socket}
+import scodec.stream.{StreamDecoder, StreamEncoder}
 
 import java.util.UUID
 
@@ -63,7 +64,7 @@ object Server {
         }
         .parJoinUnbounded
 
-  private def handleClient[F[_]: Concurrent: Console](
+  private def handleClient[F[_]: Concurrent: Console: Network](
                                                        clients: Clients[F],
                                                        clientState: ConnectedClient[F],
                                                        clientSocket: Socket[F]
@@ -87,20 +88,82 @@ object Server {
       Console[F].info(s"Accepted client ${clientState.id} on $clientAddress")
     })
 
-  private def processIncoming[F[_]: Console](
+  private def processIncoming[F[_]: Console: Network: Concurrent](
                                      clients: Clients[F],
                                      clientId: UUID,
                                      messageSocket: MessageSocket[F, Proxy, ProxyResponse]
-                                   )(implicit F: MonadError[F, Throwable]): Stream[F, Nothing] =
-    messageSocket.read.evalMap {
-      case Proxy.SocksV4(command, port, address, clientId, None) => {
-        Console[F].println(s"socks proxy v4 $command $port $address")
-      }
-      case Proxy.SocksV4(command, port, _, clientId, Some(domain)) => {
-        Console[F].println(s"socks proxy v4a $command $port $domain")
-      }
-      case Proxy.SocksV5Authorization(count, protocols) => {
-        Console[F].println("socks proxy v5")
-      }
+                                   )(implicit F: MonadCancel[F, Throwable]): Stream[F, Nothing] =
+    messageSocket.read.flatMap {
+      case Proxy.SocksV4(command, port, address, clientId, None) =>
+        Stream.exec(Console[F].println(s"socks proxy v4 $command $port $address")) ++
+        Stream
+          .resource(Network[F].client(SocketAddress(address, Port(port).get)))
+          .flatMap { socket =>
+            val remoteToClient = socket
+              .reads
+              .through(messageSocket.writeBytes)
+            Stream.exec(messageSocket.write1(ProxyResponse.Socks4AuthorizationOk())) ++
+              messageSocket
+                .readBytes
+                .through(socket.writes)
+                .concurrently(remoteToClient)
+          }
+          .handleErrorWith { error =>
+            Stream.exec(messageSocket.write1 (ProxyResponse.Socks4AuthorizationErr()))
+          }
+
+      case Proxy.SocksV4(command, port, _, clientId, Some(domain)) =>
+        Stream.exec(Console[F].println(s"socks proxy v4a $command $port $domain")) ++
+          Stream
+            .resource(Network[F].client(SocketAddress.fromStringHostname(s"$domain:$port").get))
+            .flatMap { socket =>
+              val remoteToClient = socket
+                .reads
+                .through(messageSocket.writeBytes)
+              Stream.exec(messageSocket.write1(ProxyResponse.Socks4AuthorizationOk())) ++
+                messageSocket
+                  .readBytes
+                  .through(socket.writes)
+                  .concurrently(remoteToClient)
+            }
+            .handleErrorWith { error =>
+              Stream.exec(messageSocket.write1 (ProxyResponse.Socks4AuthorizationErr()))
+            }
+
+      case Proxy.SocksV5Authorization(count, protocols) =>
+        Stream.exec(Console[F].println("socks proxy v5")) ++
+          Stream.exec(messageSocket.write1(ProxyResponse.Socks5AuthMethodAccepted(protocols.head))) ++
+        messageSocket.read.flatMap {
+          case Proxy.Socks5Header(command, addressType, port) => {
+            val socketAddress: SocketAddress[Host] = addressType match {
+              case Socks5Address.IpV4(address) => SocketAddress(address, Port(port).get)
+              case Socks5Address.Domain(domain) => SocketAddress.fromStringHostname(s"$domain:$port").get
+            }
+            import ProxyResponse.Socks5Response
+            command match {
+              case Socks5Command.Connect => Stream
+                  .resource(Network[F].client(socketAddress))
+                  .flatMap { socket =>
+                    val remoteToClient = socket
+                      .reads
+                      .through(messageSocket.writeBytes)
+                    Stream.exec(
+                      messageSocket.write1(Socks5Response.requestGranted(addressType))
+                    ) ++
+                      messageSocket
+                        .readBytes
+                        .through(socket.writes)
+                        .concurrently(remoteToClient)
+                  }
+                  .handleErrorWith { error =>
+                    Stream.eval(messageSocket.write1(Socks5Response.endpointUnavailable(addressType)))
+                  }
+              case Socks5Command.PortBinding => Stream.exec(
+                messageSocket.write1(Socks5Response.notSupported(addressType)))
+              case Socks5Command.UdpAssociation => Stream.exec(
+                messageSocket.write1(Socks5Response.notSupported(addressType)))
+            }
+          }
+        }
     }.drain
 }

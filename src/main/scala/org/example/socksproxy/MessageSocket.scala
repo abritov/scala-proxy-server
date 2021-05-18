@@ -3,8 +3,9 @@ package org.example.socksproxy
 import cats.effect.Concurrent
 import cats.effect.std.Queue
 import cats.implicits._
-import fs2.Stream
+import fs2.{Chunk, Pipe, Stream}
 import fs2.io.net.Socket
+import scodec.bits.{BitVector, ByteVector}
 import scodec.stream.{StreamDecoder, StreamEncoder}
 import scodec.{Decoder, Encoder}
 
@@ -14,7 +15,9 @@ import scodec.{Decoder, Encoder}
  */
 trait MessageSocket[F[_], In, Out] {
   def read: Stream[F, In]
+  def readBytes: Stream[F, Byte]
   def write1(out: Out): F[Unit]
+  def writeBytes(bytes: Stream[F, Byte]): Stream[F, Nothing]
 }
 
 object MessageSocket {
@@ -28,6 +31,9 @@ object MessageSocket {
     for {
       outgoing <- Queue.bounded[F, Out](outputBound)
     } yield new MessageSocket[F, In, Out] {
+
+      def readBytes: Stream[F, Byte] = socket.reads
+
       def read: Stream[F, In] = {
         val readSocket = socket.reads
           .through(StreamDecoder.many(inDecoder).toPipeByte[F])
@@ -39,6 +45,12 @@ object MessageSocket {
 
         readSocket.concurrently(writeOutput)
       }
+
       def write1(out: Out): F[Unit] = outgoing.offer(out)
+
+      def writeBytes(out: Stream[F, Byte]): Stream[F, Nothing] =
+        out
+          .through(StreamEncoder.many(scodec.codecs.byte).toPipeByte)
+          .through(socket.writes)
     }
 }
