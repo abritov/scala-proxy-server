@@ -21,7 +21,6 @@ object ProxyResponse {
 
   object Socks4Response {
     implicit val codec: Codec[Socks4Response] = {
-      constant(hex"00") ::
         ("code" | Codec[Socks4ResponseCode]) ::
         constant(hex"000000000000")
     }.as[Socks4Response]
