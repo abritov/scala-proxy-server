@@ -102,14 +102,14 @@ object Server {
             val remoteToClient = socket
               .reads
               .through(messageSocket.writeBytes)
-            Stream.exec(messageSocket.write1(ProxyResponse.Socks4AuthorizationOk())) ++
+            Stream.exec(messageSocket.write1(ProxyResponse.Socks4Response.requestGranted)) ++
               messageSocket
                 .readBytes
                 .through(socket.writes)
                 .concurrently(remoteToClient)
           }
           .handleErrorWith { error =>
-            Stream.exec(messageSocket.write1 (ProxyResponse.Socks4AuthorizationErr()))
+            Stream.exec(messageSocket.write1(ProxyResponse.Socks4Response.requestDenied))
           }
 
       case Proxy.SocksV4(command, port, _, clientId, Some(domain)) =>
@@ -120,14 +120,14 @@ object Server {
               val remoteToClient = socket
                 .reads
                 .through(messageSocket.writeBytes)
-              Stream.exec(messageSocket.write1(ProxyResponse.Socks4AuthorizationOk())) ++
+              Stream.exec(messageSocket.write1(ProxyResponse.Socks4Response.requestGranted)) ++
                 messageSocket
                   .readBytes
                   .through(socket.writes)
                   .concurrently(remoteToClient)
             }
             .handleErrorWith { error =>
-              Stream.exec(messageSocket.write1 (ProxyResponse.Socks4AuthorizationErr()))
+              Stream.exec(messageSocket.write1 (ProxyResponse.Socks4Response.requestDenied))
             }
 
       case Proxy.SocksV5Authorization(count, protocols) =>

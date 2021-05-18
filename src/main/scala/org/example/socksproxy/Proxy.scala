@@ -7,41 +7,45 @@ import scodec.codecs._
 
 sealed trait ProxyResponse
 object ProxyResponse {
-  final case class Socks4AuthorizationOk() extends ProxyResponse
-  final case class Socks4AuthorizationErr() extends ProxyResponse
+  final case class Socks4Response(code: Socks4ResponseCode) extends ProxyResponse
   final case class Socks5AuthMethodAccepted(method: Int) extends ProxyResponse
-  final case class Socks5Response(response: Socks5ResponseCode, addressType: Socks5Address) extends ProxyResponse
+  final case class Socks5Response(code: Socks5ResponseCode, addressType: Socks5Address) extends ProxyResponse
+
+
+  implicit val codec: Codec[ProxyResponse] = discriminated[ProxyResponse]
+    .by(uint8)
+    .typecase(0, Codec[Socks4Response])
+    .typecase(5, Codec[Socks5AuthMethodAccepted])
+    .typecase(5, Codec[Socks5Response])
+    .encodeOnly
+
+  object Socks4Response {
+    implicit val codec: Codec[Socks4Response] = {
+      constant(hex"00") ::
+        ("code" | Codec[Socks4ResponseCode]) ::
+        constant(hex"000000000000")
+    }.as[Socks4Response]
+
+    def requestGranted: Socks4Response = Socks4Response(Socks4ResponseCode.RequestGranted)
+    def requestDenied: Socks4Response = Socks4Response(Socks4ResponseCode.RequestDenied)
+  }
+
+  sealed trait Socks4ResponseCode
+  object Socks4ResponseCode {
+    implicit val codec: DiscriminatorCodec[Socks4ResponseCode, Int] = mappedEnum(
+      uint8,
+      Socks4ResponseCode.RequestGranted -> 0x5a,
+      Socks4ResponseCode.RequestDenied -> 0x5b,
+    )
+    object RequestGranted extends Socks4ResponseCode
+    object RequestDenied extends Socks4ResponseCode
+  }
 
   object Socks5AuthMethodAccepted {
     implicit val codec: Codec[Socks5AuthMethodAccepted] = {
         ("method" | uint8)
     }.as[Socks5AuthMethodAccepted]
   }
-
-
-  class Socks4AuthorizationOkCodec extends Codec[Socks4AuthorizationOk] {
-    override def decode(bits: BitVector): Attempt[DecodeResult[Socks4AuthorizationOk]] = Attempt.failure(Err("call decode on Socks4AuthorizationOkCodec"))
-
-    override def encode(value: Socks4AuthorizationOk): Attempt[BitVector] = Attempt.successful(hex"005a000000000000".bits)
-
-    override def sizeBound: SizeBound = SizeBound.exact(8 * 8)
-  }
-  object Socks4AuthorizationOk {
-    implicit val codec: Codec[Socks4AuthorizationOk] = new Socks4AuthorizationOkCodec()
-  }
-
-
-  class Socks4AuthorizationErrCodec extends Codec[Socks4AuthorizationErr] {
-    override def decode(bits: BitVector): Attempt[DecodeResult[Socks4AuthorizationErr]] = Attempt.failure(Err("call decode on Socks4AuthorizationOkCodec"))
-
-    override def encode(value: Socks4AuthorizationErr): Attempt[BitVector] = Attempt.successful(hex"005b000000000000".bits)
-
-    override def sizeBound: SizeBound = SizeBound.exact(8 * 8)
-  }
-  object Socks4AuthorizationErr {
-    implicit val codec: Codec[Socks4AuthorizationErr] = new Socks4AuthorizationErrCodec()
-  }
-
 
   object Socks5Response {
     implicit val codec: Codec[Socks5Response] = {
@@ -54,6 +58,7 @@ object ProxyResponse {
     def endpointUnavailable(addressType: Socks5Address): Socks5Response = Socks5Response(Socks5ResponseCode.EndpointUnavailable, addressType)
     def notSupported(addressType: Socks5Address): Socks5Response = Socks5Response(Socks5ResponseCode.NotSupported, addressType)
   }
+
   sealed trait Socks5ResponseCode
   object Socks5ResponseCode {
     implicit val codec: DiscriminatorCodec[Socks5ResponseCode, Int] = mappedEnum(
@@ -78,10 +83,6 @@ object ProxyResponse {
     object NotSupported extends Socks5ResponseCode
     object AddressNotSupported extends Socks5ResponseCode
   }
-
-  implicit val codec: Codec[ProxyResponse] = discriminated[ProxyResponse]
-    .by(uint8)
-    .typecase(5, Socks5AuthMethodAccepted.codec)
 }
 
 
