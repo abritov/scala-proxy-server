@@ -151,7 +151,7 @@ object Server {
                       .through(messageSocket.writeBytes)
                     Stream.exec(Console[F].println(s"v5 remote connection ok $socketAddress")) ++
                     Stream.exec(
-                      messageSocket.write1(Socks5Response.requestGranted(addressType))
+                      messageSocket.write1(Socks5Response.requestGranted(addressType, port))
                     ) ++
                       messageSocket
                         .readBytes
@@ -159,12 +159,12 @@ object Server {
                         .concurrently(remoteToClient)
                   }
                   .handleErrorWith { error =>
-                    Stream.eval(messageSocket.write1(Socks5Response.endpointUnavailable(addressType)))
+                    Stream.eval(messageSocket.write1(Socks5Response.endpointUnavailable(addressType, port)))
                   }
               case Socks5Command.PortBinding => Stream.exec(
-                messageSocket.write1(Socks5Response.notSupported(addressType)))
+                messageSocket.write1(Socks5Response.notSupported(addressType, port)))
               case Socks5Command.UdpAssociation => Stream.exec(
-                messageSocket.write1(Socks5Response.notSupported(addressType)))
+                messageSocket.write1(Socks5Response.notSupported(addressType, port)))
             }
           }
         }

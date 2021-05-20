@@ -9,7 +9,7 @@ sealed trait ProxyResponse
 object ProxyResponse {
   final case class Socks4Response(code: Socks4ResponseCode) extends ProxyResponse
   final case class Socks5AuthMethodAccepted(method: Int) extends ProxyResponse
-  final case class Socks5Response(code: Socks5ResponseCode, addressType: Socks5Address) extends ProxyResponse
+  final case class Socks5Response(code: Socks5ResponseCode, addressType: Socks5Address, port: Int) extends ProxyResponse
 
 
   implicit val codec: Codec[ProxyResponse] = discriminated[ProxyResponse]
@@ -50,12 +50,13 @@ object ProxyResponse {
     implicit val codec: Codec[Socks5Response] = {
       ("response" | Codec[Socks5ResponseCode]) ::
         constant(hex"00") ::
-        ("addressType" | Codec[Socks5Address])
+        ("addressType" | Codec[Socks5Address]) ::
+        ("port" | uint16)
     }.as[Socks5Response]
 
-    def requestGranted(addressType: Socks5Address): Socks5Response = Socks5Response(Socks5ResponseCode.RequestGranted, addressType)
-    def endpointUnavailable(addressType: Socks5Address): Socks5Response = Socks5Response(Socks5ResponseCode.EndpointUnavailable, addressType)
-    def notSupported(addressType: Socks5Address): Socks5Response = Socks5Response(Socks5ResponseCode.NotSupported, addressType)
+    def requestGranted(addressType: Socks5Address, port: Int): Socks5Response = Socks5Response(Socks5ResponseCode.RequestGranted, addressType, port)
+    def endpointUnavailable(addressType: Socks5Address, port: Int): Socks5Response = Socks5Response(Socks5ResponseCode.EndpointUnavailable, addressType, port)
+    def notSupported(addressType: Socks5Address, port: Int): Socks5Response = Socks5Response(Socks5ResponseCode.NotSupported, addressType, port)
   }
 
   sealed trait Socks5ResponseCode
