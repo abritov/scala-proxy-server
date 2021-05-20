@@ -91,11 +91,10 @@ object Proxy {
   implicit val codec: Codec[Proxy] = discriminated[Proxy]
     .by(uint8)
     .typecase(4, Codec[SocksV4])
-    .typecase(5, Codec[SocksV5Authorization])
+    .typecase(5, Codec[SocksV5])
 
   final case class SocksV4(command: Socks4Command, port: Int, address: Ipv4Address, clientId: String, domain: Option[String]) extends Proxy
-  final case class SocksV5Authorization(supportedAuthProtocolsCount: Int, authProtocols: Vector[Int]) extends Proxy
-  final case class Socks5Header(command: Socks5Command, address: Socks5Address, port: Int) extends Proxy
+  final case class SocksV5(auth: Option[SocksV5Authorization], header: Option[Socks5Header]) extends Proxy
   object HttpTunnel extends Proxy
   final case class Http(address: String) extends Proxy
 
@@ -113,21 +112,25 @@ object Proxy {
     }.as[SocksV4]
   }
 
-  object SocksV5Authorization {
-    implicit val codec: Codec[SocksV5Authorization] = {
-      (("supportedAuthProtocolsCount" | uint8) flatPrepend { count =>
-        ("authProtocols" | vectorOfN(provide(count), uint8)).hlist
-      })
-    }.as[SocksV5Authorization]
-  }
+  object SocksV5 {
+    implicit val codec: Codec[SocksV5] = {
+      def decodeRecord(bits: BitVector): Attempt[DecodeResult[SocksV5]] = Socks5Header.codec.decode(bits)
+        .fold(
+          _ => SocksV5Authorization.codec.decode(bits).fold(
+            _ => Attempt.failure(Err("invalid socks5 decode state2")),
+            { case DecodeResult(auth, rest3) => Attempt.successful(DecodeResult(SocksV5(Some(auth), None), rest3)) }),
+          {
+            case DecodeResult(header, rest2) => Attempt.successful(DecodeResult(SocksV5(None, Some(header)), rest2))
+            case _ => Attempt.failure(Err("invalid socks5 decode state1"))
+          })
 
-  object Socks5Header {
-    implicit val codec: Codec[Socks5Header] = {
-      ("command" | Codec[Socks5Command]) ::
-        constant(hex"00") ::
-        ("address" | Codec[Socks5Address]) ::
-        ("port" | uint16)
-    }.as[Socks5Header]
+      def encodeRecord(rec: SocksV5): Attempt[BitVector] = rec match {
+        case SocksV5(Some(auth), None) => SocksV5Authorization.codec.encode(auth)
+        case SocksV5(None, Some(header)) => Socks5Header.codec.encode(header)
+      }
+
+      Codec(Encoder(encodeRecord _), Decoder(decodeRecord _))
+    }
   }
 }
 
@@ -164,6 +167,27 @@ object Socks5Address {
     .by(uint8)
     .typecase(1, Proxy.ipv4Codec.xmap[IpV4](Socks5Address.IpV4, _.address))
     .typecase(3, variableSizeBytes(uint8, ascii).xmap[Domain](Socks5Address.Domain, _.domain))
-  case class IpV4(address: Ipv4Address) extends Socks5Address
-  case class Domain(domain: String) extends Socks5Address
+  final case class IpV4(address: Ipv4Address) extends Socks5Address
+  final case class Domain(domain: String) extends Socks5Address
+}
+
+final case class SocksV5Authorization(supportedAuthProtocolsCount: Int, authProtocols: Vector[Int])
+
+object SocksV5Authorization {
+  implicit val codec: Codec[SocksV5Authorization] = {
+    (("supportedAuthProtocolsCount" | uint8) flatPrepend { count =>
+      ("authProtocols" | vectorOfN(provide(count), uint8)).hlist
+    })
+  }.as[SocksV5Authorization]
+}
+
+final case class Socks5Header(command: Socks5Command, address: Socks5Address, port: Int)
+
+object Socks5Header {
+  implicit val codec: Codec[Socks5Header] = {
+    ("command" | Codec[Socks5Command]) ::
+      constant(hex"00") ::
+      ("address" | Codec[Socks5Address]) ::
+      ("port" | uint16)
+  }.as[Socks5Header]
 }

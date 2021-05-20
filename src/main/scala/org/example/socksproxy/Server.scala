@@ -103,10 +103,11 @@ object Server {
               .reads
               .through(messageSocket.writeBytes)
             Stream.exec(messageSocket.write1(ProxyResponse.Socks4Response.requestGranted)) ++
-              messageSocket
-                .readBytes
-                .through(socket.writes)
-                .concurrently(remoteToClient)
+              Stream.exec(Console[F].println(s"v4 requestGranted sent")) ++
+                messageSocket
+                  .readBytes
+                  .through(socket.writes)
+                  .concurrently(remoteToClient)
           }
           .handleErrorWith { error =>
             Stream.exec(messageSocket.write1(ProxyResponse.Socks4Response.requestDenied))
@@ -130,11 +131,12 @@ object Server {
               Stream.exec(messageSocket.write1 (ProxyResponse.Socks4Response.requestDenied))
             }
 
-      case Proxy.SocksV5Authorization(count, protocols) =>
+      case Proxy.SocksV5(Some(SocksV5Authorization(count, protocols)), None) =>
         Stream.exec(Console[F].println("socks proxy v5")) ++
           Stream.exec(messageSocket.write1(ProxyResponse.Socks5AuthMethodAccepted(protocols.head))) ++
+          Stream.exec(Console[F].println(s"v5 client accepted")) ++
         messageSocket.read.flatMap {
-          case Proxy.Socks5Header(command, addressType, port) => {
+          case Proxy.SocksV5(None, Some(Socks5Header(command, addressType, port))) => {
             val socketAddress: SocketAddress[Host] = addressType match {
               case Socks5Address.IpV4(address) => SocketAddress(address, Port(port).get)
               case Socks5Address.Domain(domain) => SocketAddress.fromStringHostname(s"$domain:$port").get
@@ -147,6 +149,7 @@ object Server {
                     val remoteToClient = socket
                       .reads
                       .through(messageSocket.writeBytes)
+                    Stream.exec(Console[F].println(s"v5 remote connection ok $socketAddress")) ++
                     Stream.exec(
                       messageSocket.write1(Socks5Response.requestGranted(addressType))
                     ) ++
