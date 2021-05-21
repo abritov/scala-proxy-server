@@ -15,12 +15,14 @@ import scodec.{Decoder, Encoder}
  */
 trait MessageSocket[F[_], In, Out] {
   def read: Stream[F, In]
-  def readBytes: Stream[F, Byte]
+  def readBytes: Stream[F, Chunk[Byte]]
   def write1(out: Out): F[Unit]
-  def writeBytes(bytes: Stream[F, Byte]): Stream[F, Nothing]
+  def writeBytes(bytes: Chunk[Byte]): F[Unit]
 }
 
 object MessageSocket {
+
+  def bufferSize = 8192
 
   def apply[F[_]: Concurrent, In, Out](
                                         socket: Socket[F],
@@ -32,7 +34,9 @@ object MessageSocket {
       outgoing <- Queue.bounded[F, Out](outputBound)
     } yield new MessageSocket[F, In, Out] {
 
-      def readBytes: Stream[F, Byte] = socket.reads
+      def readBytes: Stream[F, Chunk[Byte]] = Stream
+        .repeatEval(socket.read(MessageSocket.bufferSize))
+        .unNoneTerminate
 
       def read: Stream[F, In] = {
         val readSocket = socket.reads
@@ -48,9 +52,6 @@ object MessageSocket {
 
       def write1(out: Out): F[Unit] = outgoing.offer(out)
 
-      def writeBytes(out: Stream[F, Byte]): Stream[F, Nothing] =
-        out
-          .through(StreamEncoder.many(scodec.codecs.byte).toPipeByte)
-          .through(socket.writes)
+      def writeBytes(out: Chunk[Byte]): F[Unit] = socket.write(out)
     }
 }

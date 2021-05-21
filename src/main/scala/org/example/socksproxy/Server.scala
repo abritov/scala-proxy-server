@@ -99,14 +99,15 @@ object Server {
         Stream
           .resource(Network[F].client(SocketAddress(address, Port(port).get)))
           .flatMap { socket =>
-            val remoteToClient = socket
-              .reads
-              .through(messageSocket.writeBytes)
+            val remoteToClient = Stream
+              .repeatEval(socket.read(MessageSocket.bufferSize))
+              .unNoneTerminate
+              .foreach(messageSocket.writeBytes)
             Stream.exec(messageSocket.write1(ProxyResponse.Socks4Response.requestGranted)) ++
               Stream.exec(Console[F].println(s"v4 requestGranted sent")) ++
                 messageSocket
                   .readBytes
-                  .through(socket.writes)
+                  .foreach(socket.write)
                   .concurrently(remoteToClient)
           }
           .handleErrorWith { error =>
@@ -118,13 +119,14 @@ object Server {
           Stream
             .resource(Network[F].client(SocketAddress.fromStringHostname(s"$domain:$port").get))
             .flatMap { socket =>
-              val remoteToClient = socket
-                .reads
-                .through(messageSocket.writeBytes)
+              val remoteToClient = Stream
+                .repeatEval(socket.read(MessageSocket.bufferSize))
+                .unNoneTerminate
+                .foreach(messageSocket.writeBytes)
               Stream.exec(messageSocket.write1(ProxyResponse.Socks4Response.requestGranted)) ++
                 messageSocket
                   .readBytes
-                  .through(socket.writes)
+                  .foreach(socket.write)
                   .concurrently(remoteToClient)
             }
             .handleErrorWith { error =>
@@ -146,16 +148,17 @@ object Server {
               case Socks5Command.Connect => Stream
                   .resource(Network[F].client(socketAddress))
                   .flatMap { socket =>
-                    val remoteToClient = socket
-                      .reads
-                      .through(messageSocket.writeBytes)
+                    val remoteToClient = Stream
+                      .repeatEval(socket.read(MessageSocket.bufferSize))
+                      .unNoneTerminate
+                      .foreach(messageSocket.writeBytes)
                     Stream.exec(Console[F].println(s"v5 remote connection ok $socketAddress")) ++
                     Stream.exec(
                       messageSocket.write1(Socks5Response.requestGranted(addressType, port))
                     ) ++
                       messageSocket
                         .readBytes
-                        .through(socket.writes)
+                        .foreach(socket.write)
                         .concurrently(remoteToClient)
                   }
                   .handleErrorWith { error =>
